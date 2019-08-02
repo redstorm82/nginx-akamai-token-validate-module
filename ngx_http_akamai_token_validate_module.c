@@ -304,7 +304,7 @@ ngx_http_akamai_token_validate(ngx_http_request_t *r, ngx_str_t* token, ngx_str_
 		ngx_memcmp(hash_hex, parsed_token.hmac.data, hash_hex_len) != 0)
 	{
 	    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
-				"ngx_http_akamai_token_validate  hash_hex_len process: %d parsed_token.hmac.len %d",
+				"ngx_http_akamai_token_validate  hash_hex_len process: %d parsed_token.hmac.len %d or ngx_memcmp hash fail",
 				hash_hex_len,parsed_token.hmac.len);
 		return 0;
 	}
@@ -320,9 +320,13 @@ ngx_http_akamai_token_validate(ngx_http_request_t *r, ngx_str_t* token, ngx_str_
 				value);
 			return 0;
 		}
-		
-		if (value > ngx_time() + TIME_CHECK_MARGIN)
-		{
+		/*
+		ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate  parsed_token.st : %d  , ngx_time() + TIME_CHECK_MARGIN=%d ",
+				value,(ngx_time() + TIME_CHECK_MARGIN));
+				*/
+		if (value > (ngx_time() + TIME_CHECK_MARGIN))
+		{   
 		    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
 				"ngx_http_akamai_token_validate  parsed_token.st : %d  > ngx_time() + TIME_CHECK_MARGIN=%d ",
 				value,ngx_time() + TIME_CHECK_MARGIN);
