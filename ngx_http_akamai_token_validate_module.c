@@ -271,6 +271,9 @@ ngx_http_akamai_token_validate(ngx_http_request_t *r, ngx_str_t* token, ngx_str_
 
 	if (!ngx_http_akamai_token_validate_parse(token, &parsed_token))
 	{
+	    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate ngx_http_akamai_token_validate_parse process token->data: %s fail",
+				token->data);
 		return 0;
 	}
 	
@@ -279,6 +282,8 @@ ngx_http_akamai_token_validate(ngx_http_request_t *r, ngx_str_t* token, ngx_str_
 	hmac = HMAC_CTX_new();
 	if (hmac == NULL)
 	{
+	    ngx_log_debug(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate hmac = null");
 		return 0;
 	}
 #else
@@ -298,6 +303,9 @@ ngx_http_akamai_token_validate(ngx_http_request_t *r, ngx_str_t* token, ngx_str_
 	if (hash_hex_len != parsed_token.hmac.len ||
 		ngx_memcmp(hash_hex, parsed_token.hmac.data, hash_hex_len) != 0)
 	{
+	    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate  hash_hex_len process: %d parsed_token.hmac.len %d",
+				hash_hex_len,parsed_token.hmac.len);
 		return 0;
 	}
 	
@@ -307,12 +315,19 @@ ngx_http_akamai_token_validate(ngx_http_request_t *r, ngx_str_t* token, ngx_str_
 		value = ngx_atoi(parsed_token.st.data, parsed_token.st.len);
 		if (value < 0) 
 		{
+		    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate  parsed_token.st : %d <0 ",
+				value);
 			return 0;
 		}
 		
 		if (value > ngx_time() + TIME_CHECK_MARGIN)
 		{
-			return 0;
+		    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate  parsed_token.st : %d  > ngx_time() + TIME_CHECK_MARGIN=%d ",
+				value,ngx_time() + TIME_CHECK_MARGIN);
+			//felix edit ,we did not need check token.st start
+			//return 0;
 		}
 	}
 	
@@ -321,11 +336,17 @@ ngx_http_akamai_token_validate(ngx_http_request_t *r, ngx_str_t* token, ngx_str_
 		value = ngx_atoi(parsed_token.exp.data, parsed_token.exp.len);
 		if (value < 0) 
 		{
+		    ngx_log_debug1(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate  parsed_token.exp : %d <0 ",
+				value);
 			return 0;
 		}
 		
 		if (value + TIME_CHECK_MARGIN < ngx_time())
 		{
+		    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate  parsed_token.exp : value + TIME_CHECK_MARGIN %d  < ngx_time() %d ",
+				value + TIME_CHECK_MARGIN,ngx_time());
 			return 0;
 		}
 	}
@@ -339,6 +360,9 @@ ngx_http_akamai_token_validate(ngx_http_request_t *r, ngx_str_t* token, ngx_str_
 			if (r->uri.len < parsed_token.acl.len || 
 				ngx_memcmp(r->uri.data, parsed_token.acl.data, parsed_token.acl.len) != 0)
 			{
+			    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate  parsed_token.acl have *: r->uri.len %d  < parsed_token.acl.len %d or ngx_memcmp fail",
+				r->uri.len,parsed_token.acl.len);
 				return 0;
 			}
 		}
@@ -347,6 +371,9 @@ ngx_http_akamai_token_validate(ngx_http_request_t *r, ngx_str_t* token, ngx_str_
 			if (r->uri.len != parsed_token.acl.len || 
 				ngx_memcmp(r->uri.data, parsed_token.acl.data, parsed_token.acl.len) != 0)
 			{
+			    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate  parsed_token.acl have not *: r->uri.len %d  != parsed_token.acl.len %d or ngx_memcmp fail",
+				r->uri.len,parsed_token.acl.len);
 				return 0;
 			}
 		}
@@ -359,6 +386,9 @@ ngx_http_akamai_token_validate(ngx_http_request_t *r, ngx_str_t* token, ngx_str_
 		if (parsed_token.ip.len != addr_text->len ||
 			ngx_memcmp(parsed_token.ip.data, addr_text->data, parsed_token.ip.len) != 0)
 		{
+		    ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate  parsed_token.ip have not *: parsed_token.ip.len %d  != addr_text->len %d or ngx_memcmp fail ",
+				parsed_token.ip.len,addr_text->len);
 			return 0;
 		}
 	}
