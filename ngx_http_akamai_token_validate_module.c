@@ -13,6 +13,7 @@ typedef struct {
 	ngx_str_t 	key;
 	ngx_array_t* filename_prefixes;
 	ngx_str_t	strip_token;
+	ngx_str_t	strip_session;
 } ngx_http_akamai_token_validate_loc_conf_t;
 
 enum {
@@ -78,6 +79,13 @@ static ngx_command_t  ngx_http_akamai_token_validate_commands[] = {
 	ngx_conf_set_str_slot,
 	NGX_HTTP_LOC_CONF_OFFSET,
 	offsetof(ngx_http_akamai_token_validate_loc_conf_t, strip_token),
+	NULL },
+	
+	{ ngx_string("akamai_token_validate_strip_session"),
+	NGX_HTTP_MAIN_CONF | NGX_HTTP_SRV_CONF | NGX_HTTP_LOC_CONF | NGX_CONF_FLAG,
+	ngx_conf_set_str_slot,
+	NGX_HTTP_LOC_CONF_OFFSET,
+	offsetof(ngx_http_akamai_token_validate_loc_conf_t, strip_session),
 	NULL },
 
 	ngx_null_command
@@ -405,7 +413,7 @@ ngx_http_akamai_token_validate_strip_arg(ngx_http_request_t *r, ngx_str_t* arg_n
 {
 	u_char* arg_start = arg_value->data - arg_name->len - 1;	// 1 = the equal sign
 	u_char* arg_end = arg_value->data + arg_value->len;
-	u_char* uri_end = r->unparsed_uri.data + r->unparsed_uri.len;
+	u_char* uri_end = r->unparsed_uri.data + r->unparsed_uri.len + 1;
 	u_char* new_uri;
 	u_char* p;
 
@@ -414,6 +422,15 @@ ngx_http_akamai_token_validate_strip_arg(ngx_http_request_t *r, ngx_str_t* arg_n
 	if (arg_start < r->unparsed_uri.data || arg_end > uri_end || 
 		arg_start < r->args.data || arg_end > r->args.data + r->args.len)
 	{
+	    ngx_log_debug4(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate  arg_start %d  r->unparsed_uri.data %d arg_end %d uri_end %d",
+				arg_start , r->unparsed_uri.data,arg_end , uri_end);
+		ngx_log_debug4(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate  arg_start %d  r->args.data %d arg_end %d r->args.data + r->args.len %d",
+				arg_start , r->args.data,arg_end , r->args.data + r->args.len);
+		ngx_log_debug2(NGX_LOG_DEBUG_HTTP, r->connection->log, 0,
+				"ngx_http_akamai_token_validate  r->unparsed_uri.data %s  r->args.data %s ",
+				r->unparsed_uri.data,r->args.data);
 		ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
 			"ngx_http_akamai_token_validate_module: unexpected, token is not within unparsed_uri / args");
 		return NGX_ERROR;
@@ -463,6 +480,7 @@ ngx_http_akamai_token_validate_handler(ngx_http_request_t *r)
 	ngx_flag_t prefix_matched;
 	ngx_str_t uri_filename;
 	ngx_str_t token;
+	ngx_str_t session;
 	ngx_str_t* cur_prefix;
 	ngx_uint_t i;
 	u_char* last_slash_pos;
@@ -522,7 +540,14 @@ ngx_http_akamai_token_validate_handler(ngx_http_request_t *r)
 				return NGX_HTTP_INTERNAL_SERVER_ERROR;
 			}
 		}
-
+	    //felix add we try to strip arg session,only strip ,not check
+        if (conf->strip_session.len != 0)
+		{
+			if (ngx_http_arg(r, conf->strip_session.data, conf->strip_session.len, &session) == NGX_OK)
+			{
+				ngx_http_akamai_token_validate_strip_arg(r, &conf->strip_session, &session);
+			}		
+		}
 		return NGX_OK;
 	}
 	else
@@ -560,6 +585,7 @@ ngx_http_akamai_token_validate_merge_loc_conf(ngx_conf_t *cf, void *parent, void
 	ngx_conf_merge_str_value(conf->key, prev->key, "");
 	ngx_conf_merge_ptr_value(conf->filename_prefixes, prev->filename_prefixes, NULL);
 	ngx_conf_merge_str_value(conf->strip_token, prev->strip_token, "");
+	ngx_conf_merge_str_value(conf->strip_session, prev->strip_session, "");
 	return NGX_CONF_OK;
 }
 
