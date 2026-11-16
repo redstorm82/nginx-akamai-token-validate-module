@@ -416,6 +416,8 @@ ngx_http_akamai_token_validate_strip_arg(ngx_http_request_t *r, ngx_str_t* arg_n
 	u_char* uri_end = r->unparsed_uri.data + r->unparsed_uri.len + 1;
 	u_char* new_uri;
 	u_char* p;
+	size_t  args_offset;
+	size_t  del_start, del_end;
 
 	// Note: this code assumes that the arg returned from ngx_http_arg points to a substring of 
 	//	of r->unparsed_uri and r->args, that is always the case according to nginx code
@@ -436,23 +438,55 @@ ngx_http_akamai_token_validate_strip_arg(ngx_http_request_t *r, ngx_str_t* arg_n
 		return NGX_ERROR;
 	}
 
+	/* 参数区在 unparsed_uri 中的偏移, 即 '?' 之后第一个字符的位置 */
+	args_offset = r->args.data - r->unparsed_uri.data;
+
+	if (arg_start > r->args.data)
+	{
+		/* token 不是第一个参数: 连同它前面那个 '&' 一起删掉 */
+		del_start = (arg_start - 1) - r->args.data;
+		del_end = arg_end - r->args.data;
+	}
+	else
+	{
+		/* token 是第一个参数: 去掉 token 本身; 若其后紧跟 '&' 也一并去掉,
+		   否则会留下 "?&x=1" 这种畸形参数串 */
+		del_start = 0;
+		del_end = arg_end - r->args.data;
+		if (arg_end < r->args.data + r->args.len && *arg_end == '&')
+		{
+			del_end++;
+		}
+	}
+
 	new_uri = ngx_palloc(r->pool, r->unparsed_uri.len + 1);
 	if (new_uri == NULL)
 	{
 		return NGX_ERROR;
 	}
 
-	p = ngx_copy(new_uri, r->unparsed_uri.data, arg_start - r->unparsed_uri.data);
-	if (arg_end + 1 < uri_end)
+	p = ngx_copy(new_uri, r->unparsed_uri.data, args_offset + del_start);
+	p = ngx_copy(p, r->unparsed_uri.data + args_offset + del_end,
+				 r->unparsed_uri.len - (args_offset + del_end));
+
+	if (p > new_uri && (p[-1] == '?' || p[-1] == '&'))
 	{
-		p = ngx_copy(p, arg_end + 1, uri_end - arg_end - 1);
-	}
-	if (p[-1] == '?' || p[-1] == '&')
 		p--;
+	}
 	*p = '\0';
 
-	r->args.data = new_uri + (r->args.data - r->unparsed_uri.data);
-	r->args.len -= (arg_end - arg_start);
+	/* 原来这里只减 (arg_end - arg_start), 少减了分隔符 '&', 导致 r->args.len
+	   比实际字符串多/少 1 字节(末字节被截断或带入 NUL);
+	   直接按"改写后字符串的实际长度"计算, 不再做减法, 彻底消除这个偏差 */
+	r->args.data = new_uri + args_offset;
+	if (p >= new_uri + args_offset)
+	{
+		r->args.len = p - new_uri - args_offset;
+	}
+	else
+	{
+		r->args.len = 0;
+	}
 
 	r->unparsed_uri.data = new_uri;
 	r->unparsed_uri.len = p - new_uri;
